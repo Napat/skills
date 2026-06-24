@@ -1,0 +1,4 @@
+interface:
+  display_name: "Go Service Builder"
+  short_description: "Build Go service and Kustomize project skeletons"
+  default_prompt: "Create or update a Go service or Kustomize project using the go-service-builder conventions."
