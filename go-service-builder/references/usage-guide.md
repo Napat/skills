@@ -2,6 +2,30 @@
 
 Use `go-service-builder` when creating new Go service projects or matching Kustomize deployment projects. The skill supports code-only, kustomize-only, and combined generation.
 
+## Capabilities
+
+Use the skill to create or update:
+
+- Go service repositories.
+- Kustomize deployment repositories.
+- Code-only, Kustomize-only, or combined code plus Kustomize work.
+- HTTP API services, orchestration services, adaptor services, Kafka/message consumers, and scheduled batch jobs.
+
+The skill is generic. It does not assume a private Git host, company-specific package, internal standard library, or private container registry unless you explicitly provide one.
+
+## Prerequisites
+
+Install these tools before using all validation paths:
+
+- Codex.
+- Git.
+- Python 3.10 or newer.
+- Go, if you want to build or test generated Go services.
+- Docker, if you want to build generated Dockerfiles.
+- Kustomize, if you want to validate generated Kubernetes manifests.
+
+The bundled version resolver uses only Python standard library modules.
+
 ## Quick Prompts
 
 Create code only:
@@ -27,6 +51,15 @@ Create a batch:
 ```text
 Use go-service-builder to create a batch job named batch-daily-settlement. Module path is github.com/acme/batch-daily-settlement. It runs every day at 17:01 Asia/Bangkok, reads MySQL, writes a report, and deploys as a CronJob.
 ```
+
+## Key Behavior
+
+- Pin Go, Alpine, and Docker image versions instead of using `latest`.
+- Use Alpine-based images by default.
+- Use port `80` consistently across app, Docker, Kustomize, Service, and probes.
+- Default timezone to `Asia/Bangkok`, but ask the user to confirm it before generating files.
+- Use Kustomize `patches`, not deprecated `patchesStrategicMerge`.
+- Keep production secrets as placeholders.
 
 ## Information To Provide
 
@@ -89,6 +122,47 @@ Batch projects replace `deployment.yaml` and `service.yaml` with `cronjob.yaml` 
 ## Version Behavior
 
 The skill must check official sources at generation time and pin versions. It must not put `latest` in committed files. Use explicit versions such as `go 1.xx`, `FROM golang:1.xx.x-alpine3.yy`, and `FROM alpine:3.yy`.
+
+## Validation
+
+Run the repository validator:
+
+```bash
+python3 scripts/validate_skill.py go-service-builder
+```
+
+Expected output:
+
+```text
+OK: go-service-builder
+```
+
+Then test the version resolver:
+
+```bash
+python3 go-service-builder/scripts/resolve_versions.py
+```
+
+Expected output is JSON similar to:
+
+```json
+{
+  "go": {
+    "module_go": "1.xx",
+    "version": "1.xx.x"
+  },
+  "images": {
+    "builder": {
+      "image": "golang:1.xx.x-alpine3.xx"
+    },
+    "runtime": {
+      "image": "alpine:3.xx"
+    }
+  }
+}
+```
+
+The exact versions change over time because the script checks official sources.
 
 ## Secret Behavior
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate a Codex skill folder with only Python standard library modules."""
+"""Validate one or more Codex skill folders with only Python standard library modules."""
 
 from __future__ import annotations
 
@@ -60,36 +60,49 @@ def validate(skill_path: Path) -> list[str]:
     if not agents_yaml.exists():
         errors.append("missing agents/openai.yaml")
 
-    for rel in [
-        "references/usage-guide.md",
-        "references/archetypes.md",
-        "references/code-patterns.md",
-        "references/kustomize-patterns.md",
-        "references/version-policy.md",
-        "scripts/resolve_versions.py",
-    ]:
-        if not (skill_path / rel).exists():
-            errors.append(f"missing {rel}")
+    if (skill_path / "README.md").exists():
+        errors.append("skill folders should not contain README.md; put human docs in the repository root")
 
     return errors
 
 
+def discover_skill_paths(root: Path) -> list[Path]:
+    return sorted(
+        path
+        for path in root.iterdir()
+        if path.is_dir() and not path.name.startswith(".") and (path / "SKILL.md").exists()
+    )
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("skill_path", help="Path to a Codex skill folder")
+    parser.add_argument("skill_path", nargs="?", help="Path to a Codex skill folder")
+    parser.add_argument("--all", action="store_true", help="Validate every top-level skill folder in this repository")
     args = parser.parse_args()
 
-    skill_path = Path(args.skill_path).resolve()
-    errors = validate(skill_path)
-    if errors:
-        for error in errors:
-            print(f"ERROR: {error}", file=sys.stderr)
-        return 1
+    repo_root = Path(__file__).resolve().parents[1]
+    if args.all:
+        skill_paths = discover_skill_paths(repo_root)
+        if not skill_paths:
+            print("ERROR: no skill folders found", file=sys.stderr)
+            return 1
+    elif args.skill_path:
+        skill_paths = [Path(args.skill_path).resolve()]
+    else:
+        parser.error("provide a skill_path or use --all")
 
-    print(f"OK: {skill_path.name}")
-    return 0
+    failed = False
+    for skill_path in skill_paths:
+        errors = validate(skill_path)
+        if errors:
+            failed = True
+            for error in errors:
+                print(f"ERROR: {skill_path.name}: {error}", file=sys.stderr)
+        else:
+            print(f"OK: {skill_path.name}")
+
+    return 1 if failed else 0
 
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

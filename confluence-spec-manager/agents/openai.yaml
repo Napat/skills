@@ -1,0 +1,4 @@
+interface:
+  display_name: "Confluence Spec Manager"
+  short_description: "Draft, review, and clean Confluence specs"
+  default_prompt: "Use $confluence-spec-manager to draft, review, or clean a Confluence-ready technical specification."
