@@ -75,6 +75,41 @@ THAI_HEADINGS = [
     "รายการตรวจสอบสุดท้าย",
 ]
 
+ENGLISH_CHECKLIST = [
+    "Objective is clear",
+    "Acceptance criteria are recorded or marked as missing",
+    "Branch and commit were verified",
+    "Uncommitted changes are documented",
+    "Completed and remaining work are separated",
+    "Tests are recorded accurately",
+    "Failures and blockers are visible",
+    "Next actions are actionable",
+    "Assumptions are separated from facts",
+    "No secret values are included",
+    "Receiving-agent starter prompt is present",
+]
+
+THAI_CHECKLIST = [
+    "เป้าหมายชัดเจน",
+    "บันทึกเกณฑ์การยอมรับหรือระบุว่ายังไม่มี",
+    "ตรวจสอบสาขาและคอมมิตแล้ว",
+    "บันทึกการเปลี่ยนแปลงที่ยังไม่ได้คอมมิตไว้แล้ว",
+    "แยกงานที่เสร็จแล้วออกจากงานที่เหลือ",
+    "บันทึกผลการทดสอบอย่างถูกต้อง",
+    "แสดงความล้มเหลวและสิ่งกีดขวางอย่างชัดเจน",
+    "ขั้นตอนถัดไปนำไปปฏิบัติได้",
+    "แยกสมมติฐานออกจากข้อเท็จจริง",
+    "ไม่มีค่าความลับอยู่ในเอกสาร",
+    "มีพรอมต์เริ่มต้นสำหรับเอเจนต์ผู้รับช่วง",
+]
+
+COPY_BEGIN = "<!-- BEGIN HANDOFF COPY REGION -->"
+COPY_END = "<!-- END HANDOFF COPY REGION -->"
+
+
+def checklist_block(labels: list[str], checked: str = "x") -> str:
+    return "\n".join(f"- [{checked}] {label}" for label in labels)
+
 
 def valid_handoff(headings: list[str] = ENGLISH_HEADINGS, title: str = "Project Handoff") -> str:
     bodies = {
@@ -86,7 +121,9 @@ def valid_handoff(headings: list[str] = ENGLISH_HEADINGS, title: str = "Project 
         15: "1. Re-run `python3 -m unittest` and continue in `app.py`; expected outcome: green baseline; blocker: none.",
         16: "1. Checkout `main`.\n2. Confirm the HEAD commit.\n3. Read `AGENTS.md` when present.\n4. Run `python3 -m unittest`.",
         17: "Read `AGENTS.md` when present and `HANDOFF.md`. Verify the branch, commit, working tree, and tests. Start with Recommended Next Actions, validate changes, and report discrepancies because this handoff may be stale.",
-        18: "\n".join(["- [x] Verified item"] * 11),
+        18: checklist_block(
+            THAI_CHECKLIST if headings == THAI_HEADINGS else ENGLISH_CHECKLIST
+        ),
     }
     if headings == THAI_HEADINGS:
         bodies.update({
@@ -508,9 +545,63 @@ class ValidatorTests(unittest.TestCase):
     def test_next_actions_commands_fences_and_checklist_are_checked(self) -> None:
         no_action = valid_handoff().replace("1. Re-run `python3 -m unittest`", "Re-run python3 -m unittest")
         bad_fence = valid_handoff() + "\n```text\nunclosed\n"
-        short_checklist = valid_handoff().replace("\n".join(["- [x] Verified item"] * 11), "- [x] One item")
+        short_checklist = valid_handoff().replace(
+            checklist_block(ENGLISH_CHECKLIST), "- [x] One item"
+        )
         for content in (no_action, bad_fence, short_checklist):
             self.assertEqual(self.validate_content(content).returncode, 1)
+
+    def test_blank_critical_fields_and_generic_scaffolds_are_errors(self) -> None:
+        blank_criteria = valid_handoff().replace(
+            "## 3. Objective and Acceptance Criteria\n\n- Verified content.",
+            (
+                "## 3. Objective and Acceptance Criteria\n\n"
+                "- Objective:\n"
+                "- Acceptance criteria:\n"
+                "- Definition of done:"
+            ),
+        )
+        generic_action = valid_handoff().replace(
+            "1. Re-run `python3 -m unittest` and continue in `app.py`; expected outcome: green baseline; blocker: none.",
+            "1. Put the safest actionable step first. Include expected outcome, file/component, validation command, and dependency/blocker when known.",
+        )
+        generic_starter = valid_handoff().replace(
+            "Read `AGENTS.md` when present and `HANDOFF.md`. Verify the branch, commit, working tree, and tests. Start with Recommended Next Actions, validate changes, and report discrepancies because this handoff may be stale.",
+            "Write a concise project-specific prompt that tells the receiving agent to read applicable `AGENTS.md` and `HANDOFF.md`, verify branch/commit and working tree, review tests, avoid repeated work, start from Recommended Next Actions, validate before completion claims, report discrepancies, and treat the handoff as potentially stale.",
+        )
+        for content, expected_code in (
+            (blank_criteria, "empty-evidence-section"),
+            (generic_action, "next-actions"),
+            (generic_starter, "starter-prompt"),
+        ):
+            with self.subTest(expected_code=expected_code):
+                result = self.validate_content(content, "--json")
+                codes = {item["code"] for item in json.loads(result.stdout)["errors"]}
+                self.assertEqual(result.returncode, 1, result.stdout)
+                self.assertIn(expected_code, codes)
+
+    def test_checklist_requires_canonical_labels_in_order(self) -> None:
+        mixed_labels = ENGLISH_CHECKLIST.copy()
+        mixed_labels[0] = THAI_CHECKLIST[0]
+        mixed = valid_handoff().replace(
+            checklist_block(ENGLISH_CHECKLIST), checklist_block(mixed_labels)
+        )
+        arbitrary = valid_handoff().replace(
+            checklist_block(ENGLISH_CHECKLIST),
+            "\n".join(["- [x] Verified item"] * 11),
+        )
+        reordered_labels = ENGLISH_CHECKLIST.copy()
+        reordered_labels[0], reordered_labels[1] = reordered_labels[1], reordered_labels[0]
+        reordered = valid_handoff().replace(
+            checklist_block(ENGLISH_CHECKLIST), checklist_block(reordered_labels)
+        )
+
+        self.assertEqual(self.validate_content(mixed).returncode, 0)
+        for content in (arbitrary, reordered):
+            result = self.validate_content(content, "--json")
+            codes = {item["code"] for item in json.loads(result.stdout)["errors"]}
+            self.assertEqual(result.returncode, 1, result.stdout)
+            self.assertIn("final-checklist", codes)
 
     def test_file_size_thresholds(self) -> None:
         warning = valid_handoff() + ("x" * (65 * 1024))
@@ -661,7 +752,7 @@ class ValidatorTests(unittest.TestCase):
             "```text\nRead HANDOFF.md, verify the branch, and validate changes.\n```\nPrompt pending.",
         )
         content = content.replace(
-            "\n".join(["- [x] Verified item"] * 11),
+            checklist_block(ENGLISH_CHECKLIST),
             "```markdown\n" + "\n".join(["- [x] Hidden item"] * 11) + "\n```\nChecklist pending.",
         )
         result = self.validate_content(content, "--json")
@@ -819,6 +910,119 @@ class ValidatorTests(unittest.TestCase):
         self.assertEqual(normal.returncode, 0, normal.stdout)
         self.assertIn("needs-input", warnings)
         self.assertEqual(strict.returncode, 1, strict.stdout)
+
+
+class SkillContractTests(unittest.TestCase):
+    def test_runtime_layout_and_frontmatter(self) -> None:
+        skill = ROOT / "handoff-pack"
+        expected = {
+            "SKILL.md",
+            "agents/openai.yaml",
+            "scripts/collect_repo_state.py",
+            "scripts/validate_handoff.py",
+            "references/handoff-template.md",
+            "references/evidence-rules.md",
+            "references/quality-gates.md",
+        }
+        actual = {str(path.relative_to(skill)) for path in skill.rglob("*") if path.is_file() and "__pycache__" not in path.parts}
+        self.assertEqual(actual, expected)
+        text = (skill / "SKILL.md").read_text(encoding="utf-8")
+        frontmatter = text.split("---", 2)[1]
+        keys = {line.split(":", 1)[0].strip() for line in frontmatter.splitlines() if ":" in line}
+        self.assertEqual(keys, {"name", "description"})
+        self.assertIn("name: handoff-pack", frontmatter)
+        self.assertLess(len(text.splitlines()), 500)
+        self.assertNotRegex(text, r"\b(?:TODO|TBD|FIXME)\b")
+
+    def test_bilingual_triggers_workflow_and_boundaries(self) -> None:
+        text = (ROOT / "handoff-pack" / "SKILL.md").read_text(encoding="utf-8")
+        for phrase in (
+            "HANDOFF.md", "project handoff", "Prepare a handoff", "Audit the existing handoff",
+            "เตรียม handoff", "สร้าง HANDOFF.md", "อัปเดต HANDOFF.md", "ตรวจสอบ handoff", "สรุปงานเพื่อส่งต่อ",
+        ):
+            self.assertIn(phrase, text)
+        for path in (
+            "references/handoff-template.md", "references/evidence-rules.md", "references/quality-gates.md",
+            "scripts/collect_repo_state.py", "scripts/validate_handoff.py",
+        ):
+            self.assertIn(path, text)
+        for boundary in ("commit", "push", "merge", "deploy", "publish", "account", "conversation"):
+            self.assertIn(boundary, text.lower())
+
+    def test_operation_audit_non_git_update_and_network_boundaries(self) -> None:
+        text = (ROOT / "handoff-pack" / "SKILL.md").read_text(encoding="utf-8")
+        for phrase in (
+            "Classify the operation as `create`, `update`, or `audit`",
+            "Treat Git availability as an independent environment condition",
+            "selected project working directory",
+            "mark Git fields as `Not available`",
+            "Run `scripts/validate_handoff.py` against the existing `HANDOFF.md` first",
+            "report only",
+            "Never create, update, fix, or write a file during an audit",
+            "Read the existing `HANDOFF.md` before drafting an update",
+            "keep the original file intact while preparing a merged draft",
+            "mark a blocker resolved only with evidence",
+            "validate the draft before replacing the original",
+            "Do not automatically run `git fetch`, `git pull`, access the network, or install dependencies",
+            "local refs may be stale",
+        ):
+            self.assertIn(phrase, text)
+
+    def test_template_and_evidence_references(self) -> None:
+        references = ROOT / "handoff-pack" / "references"
+        template = (references / "handoff-template.md").read_text(encoding="utf-8")
+        self.assertIn("## Contents", template)
+        self.assertEqual(template.count(COPY_BEGIN), 1)
+        self.assertEqual(template.count(COPY_END), 1)
+        self.assertIn("Copy only the content between", template)
+        for number in range(1, 19):
+            self.assertRegex(template, rf"(?m)^## {number}\. ")
+        for heading in THAI_HEADINGS:
+            self.assertIn(heading, template)
+        for label in THAI_CHECKLIST:
+            self.assertIn(label, template)
+        self.assertIn("| Path or Component | Change | Status | Notes |", template)
+        self.assertIn("| Command | Working Directory | Status | Result |", template)
+        self.assertIn('| `[NEEDS INPUT:', template)
+        self.assertIn("| Not run |", template)
+        self.assertNotIn("[known value only]", template)
+        self.assertNotIn("- Objective:\n", template)
+        self.assertNotIn("1. Put the safest actionable step first.", template)
+        self.assertNotIn("Write a concise project-specific prompt that tells", template)
+        evidence = (references / "evidence-rules.md").read_text(encoding="utf-8")
+        for category in ("Verified", "User-provided", "Unknown or inferred", "Stale", "Conflicting"):
+            self.assertIn(category, evidence)
+        gates = (references / "quality-gates.md").read_text(encoding="utf-8")
+        for gate in ("Factual integrity", "Secret safety", "Recipient independence", "Idempotent updates"):
+            self.assertIn(gate, gates)
+        self.assertIn("Hard failures", gates)
+        self.assertIn("Warnings", gates)
+        self.assertIn("During an audit", gates)
+        self.assertIn("do not fix or rewrite", gates)
+
+    def test_template_copy_region_is_validator_compatible_but_unresolved(self) -> None:
+        template = (
+            ROOT / "handoff-pack" / "references" / "handoff-template.md"
+        ).read_text(encoding="utf-8")
+        copy_region = template.split(COPY_BEGIN, 1)[1].split(COPY_END, 1)[0].strip()
+        with tempfile.TemporaryDirectory() as raw:
+            path = Path(raw) / "HANDOFF.md"
+            path.write_text(copy_region + "\n", encoding="utf-8")
+            normal = run_validator(path, "--json")
+            strict = run_validator(path, "--json", "--strict")
+
+        normal_data = json.loads(normal.stdout)
+        self.assertEqual(normal.returncode, 0, normal.stdout)
+        self.assertFalse(normal_data["errors"])
+        self.assertIn("needs-input", {item["code"] for item in normal_data["warnings"]})
+        self.assertEqual(strict.returncode, 1, strict.stdout)
+
+    def test_openai_metadata(self) -> None:
+        metadata = (ROOT / "handoff-pack" / "agents" / "openai.yaml").read_text(encoding="utf-8")
+        self.assertIn('display_name: "Handoff Pack"', metadata)
+        self.assertIn('short_description: "Create and validate evidence-based HANDOFF.md files"', metadata)
+        self.assertIn("$handoff-pack", metadata)
+        self.assertNotIn("dependencies:", metadata)
 
 
 if __name__ == "__main__":

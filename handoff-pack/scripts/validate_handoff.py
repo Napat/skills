@@ -54,6 +54,34 @@ THAI_HEADINGS = [
     "รายการตรวจสอบสุดท้าย",
 ]
 
+ENGLISH_CHECKLIST = [
+    "Objective is clear",
+    "Acceptance criteria are recorded or marked as missing",
+    "Branch and commit were verified",
+    "Uncommitted changes are documented",
+    "Completed and remaining work are separated",
+    "Tests are recorded accurately",
+    "Failures and blockers are visible",
+    "Next actions are actionable",
+    "Assumptions are separated from facts",
+    "No secret values are included",
+    "Receiving-agent starter prompt is present",
+]
+
+THAI_CHECKLIST = [
+    "เป้าหมายชัดเจน",
+    "บันทึกเกณฑ์การยอมรับหรือระบุว่ายังไม่มี",
+    "ตรวจสอบสาขาและคอมมิตแล้ว",
+    "บันทึกการเปลี่ยนแปลงที่ยังไม่ได้คอมมิตไว้แล้ว",
+    "แยกงานที่เสร็จแล้วออกจากงานที่เหลือ",
+    "บันทึกผลการทดสอบอย่างถูกต้อง",
+    "แสดงความล้มเหลวและสิ่งกีดขวางอย่างชัดเจน",
+    "ขั้นตอนถัดไปนำไปปฏิบัติได้",
+    "แยกสมมติฐานออกจากข้อเท็จจริง",
+    "ไม่มีค่าความลับอยู่ในเอกสาร",
+    "มีพรอมต์เริ่มต้นสำหรับเอเจนต์ผู้รับช่วง",
+]
+
 ALLOWED_STATUSES = {"Passed", "Failed", "Not run", "Blocked"}
 WARNING_SIZE_BYTES = 64 * 1024
 ERROR_SIZE_BYTES = 256 * 1024
@@ -82,10 +110,17 @@ SECTION_RE = re.compile(r"^##\s+(\d+)\.\s+(.+?)\s*$")
 FENCE_OPEN_RE = re.compile(r"^\s{0,3}(`{3,}|~{3,})(.*)$")
 FENCE_CLOSE_RE = re.compile(r"^\s{0,3}(`{3,}|~{3,})[ \t]*$")
 ORDERED_ITEM_RE = re.compile(r"^\s*\d+\.\s+\S")
-CHECKBOX_RE = re.compile(r"^\s*-\s+\[(?: |x)\]\s+.*$", re.IGNORECASE)
+CHECKBOX_RE = re.compile(r"^\s*-\s+\[(?: |x)\]\s+(.+?)\s*$", re.IGNORECASE)
 TABLE_SEPARATOR_RE = re.compile(r"^:?-{3,}:?$")
 INLINE_CODE_RE = re.compile(r"`[^`\n]+`")
 NEEDS_INPUT_RE = re.compile(r"\[NEEDS INPUT(?:\s*:[^\]]*)?\]", re.IGNORECASE)
+CRITICAL_FIELD_RE = re.compile(
+    r"^\s*[-*+]\s+(?:"
+    r"Objective|Acceptance\s+criteria|Definition\s+of\s+done|"
+    r"เป้าหมาย|เกณฑ์การยอมรับ|นิยามของงานที่เสร็จสมบูรณ์|เงื่อนไขว่างานเสร็จ"
+    r")\s*:\s*(.*?)\s*$",
+    re.IGNORECASE,
+)
 BRANCH_VALUE_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/-]*$")
 COMMIT_VALUE_RE = re.compile(r"^[0-9a-fA-F]{7,40}$")
 BRANCH_LABEL_RE = re.compile(
@@ -97,6 +132,16 @@ COMMIT_LABEL_RE = re.compile(
     re.IGNORECASE,
 )
 UNAVAILABLE_VALUES = {"not available", "ไม่พร้อมใช้งาน", "detached head"}
+GENERIC_NEXT_ACTION = (
+    "put the safest actionable step first. include expected outcome, file/component, "
+    "validation command, and dependency/blocker when known."
+)
+GENERIC_STARTER_PROMPT = (
+    "write a concise project-specific prompt that tells the receiving agent to read "
+    "applicable `agents.md` and `handoff.md`, verify branch/commit and working tree, "
+    "review tests, avoid repeated work, start from recommended next actions, validate "
+    "before completion claims, report discrepancies, and treat the handoff as potentially stale."
+)
 TABLE_HEADER_ALIASES = (
     {"command", "คำสั่ง"},
     {
@@ -352,6 +397,21 @@ def _validate_metadata(
                         line_number,
                     )
                 )
+
+
+def _validate_critical_fields(
+    lines: list[tuple[int, str]], errors: list[Finding]
+) -> None:
+    for line_number, line in lines:
+        match = CRITICAL_FIELD_RE.match(line)
+        if match and not _strip_inline_formatting(match.group(1)):
+            errors.append(
+                Finding(
+                    "empty-evidence-section",
+                    "Objective, acceptance criteria, and definition-of-done labels must contain evidence or an explicit NEEDS INPUT marker.",
+                    line_number,
+                )
+            )
 
 
 def _table_cells(line: str) -> list[str] | None:
@@ -619,6 +679,10 @@ def validate_text(text: str, path: Path) -> ValidationResult:
     _validate_metadata(visible_document_lines, errors)
     sections_by_number = _section_map(sections)
 
+    objective = sections_by_number.get(3)
+    if objective:
+        _validate_critical_fields(_visible_section_lines(objective), errors)
+
     test_section = sections_by_number.get(10)
     if test_section:
         _validate_test_table(
@@ -626,16 +690,25 @@ def validate_text(text: str, path: Path) -> ValidationResult:
         )
 
     next_actions = sections_by_number.get(15)
-    if next_actions and not any(
-        ORDERED_ITEM_RE.match(line) for _, line in _visible_section_lines(next_actions)
-    ):
-        errors.append(
-            Finding(
-                "next-actions",
-                "Recommended Next Actions must contain at least one ordered-list item.",
-                next_actions[2],
+    if next_actions:
+        next_action_lines = _visible_section_lines(next_actions)
+        next_action_body = "\n".join(line for _, line in next_action_lines).casefold()
+        if GENERIC_NEXT_ACTION in next_action_body:
+            errors.append(
+                Finding(
+                    "next-actions",
+                    "Replace the generic next-action scaffold with a project-specific action or an explicit NEEDS INPUT marker.",
+                    next_actions[2],
+                )
             )
-        )
+        elif not any(ORDERED_ITEM_RE.match(line) for _, line in next_action_lines):
+            errors.append(
+                Finding(
+                    "next-actions",
+                    "Recommended Next Actions must contain at least one ordered-list item.",
+                    next_actions[2],
+                )
+            )
 
     restart = sections_by_number.get(16)
     if restart:
@@ -658,7 +731,15 @@ def validate_text(text: str, path: Path) -> ValidationResult:
         has_handoff = "handoff.md" in body.casefold()
         has_branch = bool(re.search(r"\bbranch\b", body, re.IGNORECASE)) or "สาขา" in body
         has_validation = bool(re.search(r"\bvalidat(?:e|es|ed|ing|ion)\b", body, re.IGNORECASE)) or "ตรวจสอบ" in body
-        if not (has_handoff and has_branch and has_validation):
+        if GENERIC_STARTER_PROMPT in body.casefold():
+            errors.append(
+                Finding(
+                    "starter-prompt",
+                    "Replace the generic starter-prompt scaffold with a project-specific prompt or an explicit NEEDS INPUT marker.",
+                    starter[2],
+                )
+            )
+        elif not (has_handoff and has_branch and has_validation):
             errors.append(
                 Finding(
                     "starter-prompt",
@@ -669,11 +750,12 @@ def validate_text(text: str, path: Path) -> ValidationResult:
 
     checklist = sections_by_number.get(18)
     if checklist:
-        checkbox_count = sum(
-            bool(CHECKBOX_RE.match(line))
-            for _, line in _visible_section_lines(checklist)
-        )
-        if checkbox_count != 11:
+        checkbox_items = [
+            (line_number, match.group(1).strip())
+            for line_number, line in _visible_section_lines(checklist)
+            if (match := CHECKBOX_RE.match(line))
+        ]
+        if len(checkbox_items) != 11:
             errors.append(
                 Finding(
                     "final-checklist",
@@ -681,6 +763,21 @@ def validate_text(text: str, path: Path) -> ValidationResult:
                     checklist[2],
                 )
             )
+        else:
+            for index, (line_number, label) in enumerate(checkbox_items):
+                allowed = {
+                    ENGLISH_CHECKLIST[index].casefold(),
+                    THAI_CHECKLIST[index].casefold(),
+                }
+                if label.casefold() not in allowed:
+                    errors.append(
+                        Finding(
+                            "final-checklist",
+                            "Final Verification Checklist must use all eleven canonical labels in order; each label may use its English or Thai alias.",
+                            line_number,
+                        )
+                    )
+                    break
 
     errors.extend(detect_secrets(lines))
     return ValidationResult(path=path, size_bytes=size_bytes, errors=errors, warnings=warnings)

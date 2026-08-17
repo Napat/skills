@@ -1,0 +1,4 @@
+interface:
+  display_name: "Handoff Pack"
+  short_description: "Create and validate evidence-based HANDOFF.md files"
+  default_prompt: "Use $handoff-pack to prepare an evidence-based HANDOFF.md for the current project."
