@@ -1025,5 +1025,41 @@ class SkillContractTests(unittest.TestCase):
         self.assertNotIn("dependencies:", metadata)
 
 
+class RepositoryDocumentationTests(unittest.TestCase):
+    def test_readme_documents_supported_hosts_and_paths(self) -> None:
+        text = (ROOT / "README.md").read_text(encoding="utf-8")
+        for host in (
+            "ChatGPT desktop",
+            "Codex CLI/IDE",
+            "Claude Code",
+            "Gemini CLI",
+            "Antigravity 2.0",
+            "Antigravity CLI (agy)",
+        ):
+            self.assertIn(host, text)
+        for path in (
+            ".agents/skills",
+            ".claude/skills",
+            ".gemini/skills",
+            ".gemini/config/skills",
+            ".gemini/antigravity-cli/skills",
+        ):
+            self.assertIn(path, text)
+        for prompt in ("Prepare a handoff", "เตรียม handoff", "Audit the existing handoff", "ตรวจสอบ handoff"):
+            self.assertIn(prompt, text)
+        for scenario in ("CI fix", "Repository unavailable", "Dirty working tree", "Read-only audit"):
+            self.assertIn(scenario, text)
+
+    def test_readme_scopes_invocation_syntax_to_each_host(self) -> None:
+        text = (ROOT / "README.md").read_text(encoding="utf-8")
+        for invocation in (
+            "ChatGPT: `@handoff-pack`",
+            "Codex: `$handoff-pack`",
+            "Claude Code: `/handoff-pack`",
+        ):
+            self.assertIn(invocation, text)
+        self.assertNotIn("Invoke a skill explicitly with its name when the host supports named skills", text)
+
+
 if __name__ == "__main__":
     unittest.main()
