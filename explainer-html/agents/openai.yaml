@@ -1,0 +1,4 @@
+interface:
+  display_name: "Explainer HTML"
+  short_description: "Explain technical concepts with offline HTML and video"
+  default_prompt: "Use $explainer-html to explain this topic with a standalone offline HTML page."

@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "bundle": "2bcfcb5f25449e9bdb9ae08bb3081cdeb6bfd30a74283654497bd649bcb49e91",
+  "inputs": {
+    "assets/player.js": "51a55f6ee67ffe0e232dc8db433d15ecc8be1a2ce66d463ee1504df8601605b7",
+    "assets/style.css": "d9a129c775b5771c8ba43931f9fe560773cca8fd6550036dcaf2e95b6e6755e7",
+    "package-lock.json": "bb98086e55f53688d681cd1687cb1c118b9506f7a95aed74aa8014af07bd8b4c",
+    "package.json": "75c153935c19f1d2d83c0a1929aba35dd4dbbca47148484708789c69100e8389",
+    "scripts/build.mjs": "7aba58d26bfa04599306dbe481bd8623c62a1fecea99eede432d32c9c4c95755",
+    "src/browser.mjs": "259d420fe082758e52ed2ed9da5b61c56e77c952c144fde36a89b78f517ef2e0",
+    "src/cache.mjs": "32c75d777d5ddf552b76a7de1714863d6a68a88c264d254c7501aa9a6872641b",
+    "src/cli.mjs": "d0a85de38b14571427bcb438dc7229aa65744a7724b9d72c6e7d4a458d39575d",
+    "src/compile.mjs": "d1fccf57138577fa3120aa233c62494f847d4109ab5d92cf0bc0dc96d6d733ba",
+    "src/components.mjs": "e2f4d76acbc51e744e172f355bc87d543d76c345ca5692d26cf27b254114f2fb",
+    "src/diagram.mjs": "baa2f4460737c51557caa40670d702c38f0bb9a056bb6444799cb2f79a24a017",
+    "src/jobs.mjs": "ce54c546c1ae155759e6f92cc3e14cf4afb8bb36a2f9ca266bf91ae51b9441eb",
+    "src/parse.mjs": "d9c112e56e3a3bc02f3335827803f51f52fad4e1d227794c8a39de3742206ee3",
+    "src/tts.mjs": "7a0847271e4f90e007ecb7886abb5514089d41dbf544052795d852bfba676d1e",
+    "src/util.mjs": "b04d02a0b1ae2efc09530d1676fec2b704120b3a1f4cc8b2ab3550817b396f27"
+  }
+}

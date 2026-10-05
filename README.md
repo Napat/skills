@@ -11,6 +11,7 @@ This repository contains self-contained skills that follow the open Agent Skills
 | `go-service-builder` | Build or update production-oriented Go service and Kustomize project skeletons. | [Usage guide](go-service-builder/references/usage-guide.md) |
 | `confluence-spec-manager` | Draft, review, rewrite, clean, and prepare Confluence-ready technical specs. | [Usage guide](confluence-spec-manager/references/usage-guide.md) |
 | `handoff-pack` | Create, update, or audit evidence-based project `HANDOFF.md` files in English or Thai. | [Skill instructions](handoff-pack/SKILL.md) |
+| `explainer-html` | Compile technical explanations into offline HTML, narrated walkthroughs and resumable MP4 exports. | [Skill instructions](explainer-html/SKILL.md) |
 
 ## Supported Hosts
 
@@ -84,6 +85,35 @@ Read the linked skill instructions or references before changing a skill:
 - [Go service builder usage guide](go-service-builder/references/usage-guide.md)
 - [Confluence spec manager usage guide](confluence-spec-manager/references/usage-guide.md)
 - [Handoff Pack instructions](handoff-pack/SKILL.md)
+- [Explainer HTML instructions](explainer-html/SKILL.md)
+
+## Explainer HTML
+
+The same `explainer-html/` package serves Codex, Claude Code, Gemini CLI and Antigravity. Use `$explainer-html` in Codex, `/explainer-html` in Claude Code or agy, or ask Gemini CLI to use `explainer-html`. Normal HTML generation requires Node.js 22+ and a shell, with no npm installation; parsers and Archify 3.0.1 are included with licenses and pinned hashes.
+
+Install the complete folder at `~/.agents/skills/explainer-html/` for Codex and Gemini CLI, `~/.claude/skills/explainer-html/` for Claude Code, or `~/.gemini/antigravity-cli/skills/explainer-html/` for agy. Antigravity desktop/IDE uses `~/.gemini/config/skills/explainer-html/`. Include the bundled CLI, source, assets, references and vendor files; omit development-only `node_modules`, test outputs and caches. Run the installed `scripts/verify.mjs`, then a sample render. See [host compatibility](explainer-html/references/hosts.md) for current official sources and native skill discovery on current stable clients.
+
+Examples:
+
+- `Use $explainer-html to explain this API and queue architecture as offline HTML.`
+- `อธิบาย cache miss ให้ junior ด้วย HTML ภาษาไทย พร้อมภาพและคำบรรยายเสียง`
+- `Export this walkthrough to MP4, and keep the HTML available while it renders.`
+
+Run the bundled compiler directly:
+
+```bash
+node explainer-html/scripts/render.mjs render explainer-html/examples/architecture.md --json
+node explainer-html/scripts/render.mjs render explainer-html/examples/sequence.md --json
+node explainer-html/scripts/render.mjs render explainer-html/examples/thai-video.md --voice system --json
+```
+
+Outputs are temporary by default. `--save /absolute/path/page.html` keeps a requested copy. HTML embeds its source, styles, SVG, player and rendered audio, with no CDN or network needed to open it. Blueprint and shadcn both support light/dark/auto. Large diagrams have readable zoom, pan and a Fit overview.
+
+Mac narration uses installed Kanya/Samantha voices. Optional ElevenLabs and OpenAI-compatible endpoints use environment-only credentials. See [syntax](explainer-html/references/syntax.md), [video](explainer-html/references/video.md) and [export/recovery](explainer-html/references/export.md).
+
+MP4 needs Chrome/Chromium and ffmpeg, runs in a separate worker, and returns a job ID. Commands `status`, `cancel` and `resume` manage the job. Resume checks the immutable HTML snapshot and frame hashes before reusing completed frames. Temporary checkpoints can expire; explicitly saved outputs are outside cache cleanup.
+
+Maintainers can reproduce checks with `npm ci`, `npm run build`, `npm run check:bundle`, `node scripts/verify.mjs` and `npm test` inside `explainer-html/`. [Maintenance guidance](explainer-html/references/maintenance.md) describes browser/media acceptance. [Development checkpoint](docs/explainer-html-progress.md) records verified work and how to continue after an interruption.
 
 ## Handoff Pack Examples
 
@@ -120,6 +150,7 @@ Expected output:
 
 ```text
 OK: confluence-spec-manager
+OK: explainer-html
 OK: go-service-builder
 OK: handoff-pack
 ```
